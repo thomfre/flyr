@@ -6,6 +6,8 @@
 // @author       You
 // @match        https://www.yr.no/*
 // @grant        GM_getResourceText
+// @grant        unsafeWindow
+// @require      https://raw.githubusercontent.com/mourner/suncalc/master/suncalc.js
 // @resource     airports https://raw.githubusercontent.com/thomfre/flyr/main/airports.json
 // @downloadURL  https://raw.githubusercontent.com/thomfre/flyr/main/flyr.userscript.js
 // ==/UserScript==
@@ -18,6 +20,39 @@ const getAirport = (location) => {
     if (airport.length > 0) return airport[0];
 
     return null;
+};
+
+const getSunInfo = () => {
+    try {
+        if (!unsafeWindow.__REDUX_STATE__.locations.locations) return;
+
+        const location =
+            unsafeWindow.__REDUX_STATE__.locations.locations[Object.keys(unsafeWindow.__REDUX_STATE__.locations.locations)[0]].position;
+
+        const times = SunCalc.getTimes(new Date(), location.lat, location.lon);
+
+        return (
+            ' - 🌅 ' +
+            times.dawn.getHours() +
+            ':' +
+            times.dawn.getMinutes() +
+            '-' +
+            times.sunrise.getHours() +
+            ':' +
+            times.sunrise.getMinutes() +
+            ' 🌇 ' +
+            times.sunset.getHours() +
+            ':' +
+            times.sunset.getMinutes() +
+            '-' +
+            times.dusk.getHours() +
+            ':' +
+            times.dusk.getMinutes()
+        );
+    } catch (ex) {
+        console.log(ex);
+        return '';
+    }
 };
 
 const getCrosswindFactor = (runwayHeading, windDirection, windVelocity) => {
@@ -140,7 +175,8 @@ const loadAirport = () => {
         ' - RWY ' +
         airport.runways.map((rwy) => (rwy.length === 1 ? '0' + rwy : rwy)) +
         ' - variation: ' +
-        variation;
+        variation +
+        getSunInfo();
 
     observeAndAct('#page-modal', () => {
         handleModal();
