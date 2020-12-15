@@ -63,7 +63,7 @@ const convertWind = () => {
         if (!windArrow) return;
 
         let windDirection = parseInt(windArrow.outerHTML.match(/rotate\(([-0-9]+)deg\)/)[1]);
-        windDirection += activeAirport.variation;
+        windDirection += Math.round(activeAirport.variation);
         if (windDirection <= 0) {
             windDirection = 360 - windDirection;
         } else if (windDirection > 360) {
@@ -132,7 +132,9 @@ const loadAirport = () => {
         document.querySelector('.page-header__location-header').appendChild(flyrTitle);
     }
 
-    document.querySelector('#flyr-title').innerHTML = '🛩️ ' + airport.airport + ' - RWY ' + airport.runways;
+    const variation = (airport.variation < 0 ? 'E ' : 'W ') + Math.abs(airport.variation) + '&deg;';
+
+    document.querySelector('#flyr-title').innerHTML = '🛩️ ' + airport.airport + ' - RWY ' + airport.runways + ' - variation: ' + variation;
 
     return airport;
 };

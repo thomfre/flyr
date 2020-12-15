@@ -10,5 +10,17 @@
         "location": "Stavanger lufthavn, Sola",
         "variation": -1,
         "runways": [18, 36, 11, 29]
+    },
+    {
+        "airport": "ENSO",
+        "location": "Stord lufthavn",
+        "variation": -2,
+        "runways": [14, 32]
+    },
+    {
+        "airport": "ENBR",
+        "location": "Bergen lufthavn, Flesland",
+        "variation": -0.5,
+        "runways": [17, 35]
     }
 ]
