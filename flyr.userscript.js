@@ -142,6 +142,10 @@ const loadAirport = () => {
         ' - variation: ' +
         variation;
 
+    observeAndAct('#page-modal', () => {
+        handleModal();
+    });
+
     return airport;
 };
 
@@ -183,9 +187,5 @@ const observeAndAct = (selector, callback, includeSubTree = false) => {
             },
             true
         );
-    });
-
-    observeAndAct('#page-modal', () => {
-        handleModal();
     });
 })();
