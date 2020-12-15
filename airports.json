@@ -1,15 +1,33 @@
 [
     {
+        "airport": "ENBL",
+        "location": "Førde lufthamn, Bringeland",
+        "variation": -0.4,
+        "runways": [7, 25]
+    },
+    {
+        "airport": "ENBR",
+        "location": "Bergen lufthavn, Flesland",
+        "variation": -0.5,
+        "runways": [17, 35]
+    },
+    {
+        "airport": "ENFL",
+        "location": "Florø lufthamn",
+        "variation": 0,
+        "runways": [7, 25]
+    },
+    {
         "airport": "ENHD",
         "location": "Haugesund lufthavn, Karmøy",
         "variation": -1,
         "runways": [13, 31]
     },
     {
-        "airport": "ENZV",
-        "location": "Stavanger lufthavn, Sola",
-        "variation": -1,
-        "runways": [18, 36, 11, 29]
+        "airport": "ENSG",
+        "location": "Sogndal lufthamn, Haukåsen",
+        "variation": -1.1,
+        "runways": [6, 24]
     },
     {
         "airport": "ENSO",
@@ -18,9 +36,9 @@
         "runways": [14, 32]
     },
     {
-        "airport": "ENBR",
-        "location": "Bergen lufthavn, Flesland",
-        "variation": -0.5,
-        "runways": [17, 35]
+        "airport": "ENZV",
+        "location": "Stavanger lufthavn, Sola",
+        "variation": -1,
+        "runways": [18, 36, 11, 29]
     }
 ]

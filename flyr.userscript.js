@@ -85,7 +85,7 @@ const convertWind = () => {
 
             return (
                 'RWY' +
-                rwy +
+                (rwy.length === 1 ? '0' + rwy : rwy) +
                 ': ' +
                 crosswindVelocity +
                 'kt ' +
@@ -132,9 +132,15 @@ const loadAirport = () => {
         document.querySelector('.page-header__location-header').appendChild(flyrTitle);
     }
 
-    const variation = (airport.variation < 0 ? 'E ' : 'W ') + Math.abs(airport.variation) + '&deg;';
+    const variation = airport.variation === 0 ? '0&deg;' : Math.abs(airport.variation) + '&deg; ' + (airport.variation < 0 ? 'E' : 'W');
 
-    document.querySelector('#flyr-title').innerHTML = '🛩️ ' + airport.airport + ' - RWY ' + airport.runways + ' - variation: ' + variation;
+    document.querySelector('#flyr-title').innerHTML =
+        '🛩️ ' +
+        airport.airport +
+        ' - RWY ' +
+        airport.runways.map((rwy) => (rwy.length === 1 ? '0' + rwy : rwy)) +
+        ' - variation: ' +
+        variation;
 
     return airport;
 };
@@ -144,12 +150,15 @@ const handleModal = () => {
     convertWind();
 };
 
-const observeAndAct = (selector, callback) => {
+const observeAndAct = (selector, callback, includeSubTree = false) => {
     const element = document.querySelector(selector);
+
+    if (!element) return;
 
     const observer = new MutationObserver(callback);
 
     const observerConfig = {
+        subtree: includeSubTree,
         attributes: true,
         childList: true,
         characterData: true,
@@ -167,6 +176,13 @@ const observeAndAct = (selector, callback) => {
 
     observeAndAct('.page-header', () => {
         loadAirport();
+        observeAndAct(
+            '.page-header__location-name',
+            () => {
+                loadAirport();
+            },
+            true
+        );
     });
 
     observeAndAct('#page-modal', () => {
