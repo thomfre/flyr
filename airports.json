@@ -4,5 +4,11 @@
         "location": "Haugesund lufthavn, Karmøy",
         "variation": -1,
         "runways": [13, 31]
+    },
+    {
+        "airport": "ENZV",
+        "location": "Stavanger lufthavn, Sola",
+        "variation": -1,
+        "runways": [18, 36, 11, 29]
     }
 ]

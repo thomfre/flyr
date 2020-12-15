@@ -5,20 +5,13 @@
 // @description  Make yr.no beautiful for pilots
 // @author       You
 // @match        https://www.yr.no/*
-// @grant        none
+// @grant        GM_getResourceText
+// @resource     airports https://raw.githubusercontent.com/thomfre/flyr/main/airports.json
 // @downloadURL  https://raw.githubusercontent.com/thomfre/flyr/main/flyr.userscript.js
 // ==/UserScript==
 
+let airports;
 let activeAirport;
-
-const airports = [
-    {
-        airport: 'ENHD',
-        location: 'Haugesund lufthavn, Karmøy',
-        variation: -1,
-        runways: [13, 31],
-    },
-];
 
 const getAirport = (location) => {
     const airport = airports.filter((a) => a.location === location);
@@ -122,6 +115,8 @@ const convertWind = () => {
 const loadAirport = () => {
     const location = document.querySelector('#location-heading .page-header__location-name')?.innerText;
 
+    if (!location) return;
+
     const airport = getAirport(location);
 
     if (!airport) {
@@ -130,6 +125,14 @@ const loadAirport = () => {
     }
 
     activeAirport = airport;
+
+    if (!document.querySelector('#flyr-title')) {
+        const flyrTitle = document.createElement('div');
+        flyrTitle.setAttribute('id', 'flyr-title');
+        document.querySelector('.page-header__location-header').appendChild(flyrTitle);
+    }
+
+    document.querySelector('#flyr-title').innerHTML = '🛩️ ' + airport.airport + ' - RWY ' + airport.runways;
 
     return airport;
 };
@@ -157,6 +160,8 @@ const observeAndAct = (selector, callback) => {
 
 (function () {
     'use strict';
+
+    airports = JSON.parse(GM_getResourceText('airports', 'json'));
 
     observeAndAct('.page-header', () => {
         loadAirport();
