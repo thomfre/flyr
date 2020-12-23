@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flyr
 // @namespace    https://github.com/thomfre/flyr
-// @version      0.2
+// @version      0.3
 // @description  Make yr.no beautiful for pilots
 // @author       thomfre
 // @match        https://www.yr.no/*
@@ -67,10 +67,10 @@ const getCrosswindFactor = (runwayHeading, windDirection, windVelocity) => {
 
     let crossWindDirection;
 
-    if (runwayHeading < windDirection) {
-        crossWindDirection = 'from the right';
-    } else {
+    if (windDirection - runwayHeading > -180 ? windDirection < runwayHeading : (windDirection + 360 < runwayHeading)) {
         crossWindDirection = 'from the left';
+    } else {
+        crossWindDirection = 'from the right';
     }
 
     if (angle === 0) {
