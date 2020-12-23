@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Flyr
 // @namespace    https://github.com/thomfre/flyr
-// @version      0.1
+// @version      0.2
 // @description  Make yr.no beautiful for pilots
-// @author       You
+// @author       thomfre
 // @match        https://www.yr.no/*
 // @grant        GM_getResourceText
 // @grant        unsafeWindow
@@ -56,7 +56,8 @@ const getSunInfo = () => {
 };
 
 const getCrosswindFactor = (runwayHeading, windDirection, windVelocity) => {
-    const angle = runwayHeading - windDirection;
+    let angle = Math.abs(runwayHeading - windDirection);
+    if (angle > 180) angle = 360 - angle;
     const pi = Math.PI / 180;
     const sinFactor = Math.sin(angle * pi);
     const cosFactor = Math.cos(angle * pi);
@@ -66,27 +67,26 @@ const getCrosswindFactor = (runwayHeading, windDirection, windVelocity) => {
 
     let crossWindDirection;
 
-    if (angle === 0) {
-        crossWindDirection = 'perfect headwind';
-    } else if (angle < 0) {
+    if (runwayHeading < windDirection) {
         crossWindDirection = 'from the right';
-        crossWindVelocity = crossWindVelocity * -1;
-    } else if (angle > 0) {
+    } else {
         crossWindDirection = 'from the left';
     }
 
-    if (Math.abs(angle) === 180) {
+    if (angle === 0) {
+        crossWindDirection = 'perfect headwind';
+    } else if (Math.abs(angle) === 180) {
         crossWindDirection = 'perfect tailwind';
     }
 
-    const runwayDirection = Math.abs(angle) > 90 ? 'tailwind' : 'headwind';
+    const runwayDirection = angle < 90 ? 'headwind' : 'tailwind';
 
     return {
         velocity: crossWindVelocity,
         direction: crossWindDirection,
         runwayVelocity: runwayWindVelocity,
         runwayDirection: runwayDirection,
-        display: Math.abs(angle) < 90,
+        display: angle < 90,
     };
 };
 
@@ -100,7 +100,7 @@ const convertWind = () => {
         let windDirection = parseInt(windArrow.outerHTML.match(/rotate\(([-0-9]+)deg\)/)[1]);
         windDirection += Math.round(activeAirport.variation);
         if (windDirection <= 0) {
-            windDirection = 360 - windDirection;
+            windDirection = windDirection + 360;
         } else if (windDirection > 360) {
             windDirection = windDirection - 360;
         }
