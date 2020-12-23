@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flyr
 // @namespace    https://github.com/thomfre/flyr
-// @version      0.3
+// @version      0.4
 // @description  Make yr.no beautiful for pilots
 // @author       thomfre
 // @match        https://www.yr.no/*
@@ -15,6 +15,10 @@
 
 let airports;
 let activeAirport;
+
+const convertToKts = (wind) => {
+    return wind * 1.944;
+}
 
 const getAirport = (location) => {
     const airport = airports.filter((a) => a.location === location);
@@ -91,7 +95,7 @@ const getCrosswindFactor = (runwayHeading, windDirection, windVelocity) => {
     };
 };
 
-const convertWind = () => {
+const convertWindModal = () => {
     const rows = document.querySelectorAll('#page-modal .modal-dialog__scroll-container .fluid-table__table tbody tr');
 
     rows.forEach((row) => {
@@ -106,8 +110,8 @@ const convertWind = () => {
             windDirection = windDirection - 360;
         }
 
-        const windVelocity = parseInt(row.querySelector('.wind__container .wind__value').innerText) * 1.944;
-        const windGust = parseInt(row.querySelector('.wind__container .wind__gust')?.innerText.match(/[0-9]+/) ?? 0) * 1.944;
+        const windVelocity = convertToKts(parseInt(row.querySelector('.wind__container .wind__value').innerText));
+        const windGust = convertToKts(parseInt(row.querySelector('.wind__container .wind__gust')?.innerText.match(/[0-9]+/) ?? 0));
 
         const runways = activeAirport.runways.map((rwy) => {
             const runwayHeading = rwy * 10;
@@ -148,6 +152,38 @@ const convertWind = () => {
     windColumnHeader.innerHTML = windColumnHeader.innerHTML.replace('m/s', 'kts');
 };
 
+const convertWindDaily = () => {
+    const rows = document.querySelectorAll('.daily-weather-list-item .daily-weather-list-item__wind')
+
+    rows.forEach((row) => {
+        const windValueElement = row.querySelector('.wind__container .wind__value');
+        const windVelocity = convertToKts(parseInt(windValueElement.innerText));
+        windValueElement.innerHTML = Math.round(windVelocity);
+
+        const windUnitElement = row.querySelector('.wind__container .wind__unit');
+        windUnitElement.innerHTML = 'kt';
+        windUnitElement.setAttribute('title', 'knots');
+    });
+};
+
+const convertWindCurrent = () => {
+    const windContainer = document.querySelector('.now-hero__next-hour-wind');
+    
+    const windValueElement = windContainer.querySelector('.wind__container .wind__value');
+    const windVelocity = convertToKts(parseInt(windValueElement.innerText));
+    windValueElement.innerHTML = Math.round(windVelocity);
+
+    const windGustValueElement = windContainer.querySelector('.wind__container .wind__gust');
+    if (windGustValueElement) {
+        const windGustVelocity = convertToKts(parseInt(windGustValueElement.innerText.match(/[0-9]+/)));
+        windGustValueElement.innerHTML = '(' + Math.round(windGustVelocity) + ')';
+    }
+
+    const windUnitElement = windContainer.querySelector('.wind__container .wind__unit');
+    windUnitElement.innerHTML = 'kt';
+    windUnitElement.setAttribute('title', 'knots');
+};
+
 const loadAirport = () => {
     const location = document.querySelector('#location-heading .page-header__location-name')?.innerText;
 
@@ -179,8 +215,19 @@ const loadAirport = () => {
         variation +
         getSunInfo();
 
+    handleModal();
     observeAndAct('#page-modal', () => {
         handleModal();
+    });
+
+    handleDailyWeatherList();
+    observeAndAct('ol.daily-weather-list__intervals', () => {
+        handleDailyWeatherList();
+    });
+
+    handleCurrentConditions();
+    observeAndAct('.now-hero__next-hour-text', () => {
+        handleCurrentConditions();
     });
 
     return airport;
@@ -188,7 +235,17 @@ const loadAirport = () => {
 
 const handleModal = () => {
     if (!document.querySelector('#page-modal .modal-dialog__scroll-container')) return;
-    convertWind();
+    convertWindModal();
+};
+
+const handleDailyWeatherList = () => {
+    if (!document.querySelector('.daily-weather-list-item')) return;
+    convertWindDaily();
+}
+
+const handleCurrentConditions = () => {
+    if (!document.querySelector('.now-hero__next-hour-wind')) return;
+    convertWindCurrent();
 };
 
 const observeAndAct = (selector, callback, includeSubTree = false) => {
