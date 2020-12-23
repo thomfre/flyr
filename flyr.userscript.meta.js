@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         Flyr
 // @namespace    https://github.com/thomfre/flyr
-// @version      0.4
+// @version      0.5
 // @description  Make yr.no beautiful for pilots
+// @icon         https://raw.githubusercontent.com/thomfre/flyr/main/logo.png
 // @author       thomfre
 // @match        https://www.yr.no/*
 // @grant        GM_getResourceText
