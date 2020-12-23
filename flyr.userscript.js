@@ -10,6 +10,7 @@
 // @require      https://raw.githubusercontent.com/mourner/suncalc/master/suncalc.js
 // @resource     airports https://raw.githubusercontent.com/thomfre/flyr/main/airports.json
 // @downloadURL  https://raw.githubusercontent.com/thomfre/flyr/main/flyr.userscript.js
+// @updateURL    https://raw.githubusercontent.com/thomfre/flyr/main/flyr.userscript.meta.js
 // ==/UserScript==
 
 let airports;
