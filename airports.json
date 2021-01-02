@@ -15,7 +15,7 @@
         "airport": "ENCN",
         "location": "Kristiansand lufthavn, Kjevik",
         "variation": -2.6,
-        "runways": [03,21]
+        "runways": [3,21]
     },
     {
         "airport": "ENFL",
