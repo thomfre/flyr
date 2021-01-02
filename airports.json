@@ -12,6 +12,12 @@
         "runways": [17, 35]
     },
     {
+        "airport": "ENCN",
+        "location": "Kristiansand lufthavn, Kjevik",
+        "variation": -2.6,
+        "runways": [03,21]
+    },
+    {
         "airport": "ENFL",
         "location": "Florø lufthamn",
         "variation": 0,
