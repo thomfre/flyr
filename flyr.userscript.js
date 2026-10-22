@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flyr
 // @namespace    https://github.com/thomfre/flyr
-// @version      0.6
+// @version      0.8
 // @description  Make yr.no beautiful for pilots
 // @icon         https://raw.githubusercontent.com/thomfre/flyr/main/logo.png
 // @author       thomfre
@@ -23,6 +23,22 @@
     // Set to true to get diagnostic output in the browser console.
     const DEBUG = false;
 
+    // A yr.no location within this distance of an airport counts as that airport.
+    const MATCH_RADIUS_KM = 1.5;
+
+    // Built-in airport data, so the script works even if airports.json can't be loaded.
+    // Entries in airports.json (the @resource) override these per ICAO code.
+    const BUILTIN_AIRPORTS = [
+        { airport: 'ENBL', location: 'Førde lufthamn, Bringeland', variation: -0.4, runways: [7, 25], lat: 61.3917, lon: 5.7636 },
+        { airport: 'ENBR', location: 'Bergen lufthavn, Flesland', variation: -0.5, runways: [17, 35], lat: 60.2936, lon: 5.2181 },
+        { airport: 'ENCN', location: 'Kristiansand lufthavn, Kjevik', variation: -2.6, runways: [3, 21], lat: 58.2042, lon: 8.0853 },
+        { airport: 'ENFL', location: 'Florø lufthamn', variation: 0, runways: [7, 25], lat: 61.5836, lon: 5.0247 },
+        { airport: 'ENHD', location: 'Haugesund lufthavn, Karmøy', variation: -1, runways: [13, 31], lat: 59.3453, lon: 5.2084 },
+        { airport: 'ENSG', location: 'Sogndal lufthamn, Haukåsen', variation: -1.1, runways: [6, 24], lat: 61.1561, lon: 7.1378 },
+        { airport: 'ENSO', location: 'Stord lufthavn', variation: -2, runways: [14, 32], lat: 59.7919, lon: 5.3408 },
+        { airport: 'ENZV', location: 'Stavanger lufthavn, Sola', variation: -1, runways: [18, 36, 11, 29], lat: 58.8767, lon: 5.6378 },
+    ];
+
     const SEL = {
         windValue: '.wind__value',
         windGust: '.wind__gust',
@@ -30,30 +46,60 @@
         windRoot: '.wind',
         windContainer: '.wind__container',
         windDescription: '.wind-description',
-        locationName: '.page-header__location-name',
-        titleAnchor: '.page-header__location-header',
     };
 
     const TO_KT = { ms: 1.943844, kmh: 0.539957, mph: 0.868976, kt: 1 };
 
+    const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
     const log = (...args) => DEBUG && console.log('[Flyr]', ...args);
     const warn = (...args) => console.warn('[Flyr]', ...args);
 
-    // ---------------------------------------------------------------- data
+    // ---------------------------------------------------------------- airport data
+
+    const normalizeName = (s) =>
+        (s || '')
+            .normalize('NFC')
+            .toLowerCase()
+            .replace(/\blufthamn\b/g, 'lufthavn')
+            .replace(/\blh\b/g, 'lufthavn')
+            .replace(/\s+/g, ' ')
+            .trim();
 
     const loadAirports = () => {
+        let remote = [];
         try {
             const text = typeof GM_getResourceText === 'function' ? GM_getResourceText('airports') : null;
-            const list = JSON.parse(text);
-            if (!Array.isArray(list)) throw new Error('airports.json is not an array');
-            return list;
+            if (text) remote = JSON.parse(text);
+            if (!Array.isArray(remote)) remote = [];
         } catch (ex) {
-            warn('Could not load airports.json', ex);
-            return [];
+            warn('Could not read airports.json, using built-in list', ex);
         }
+
+        const byIcao = new Map(BUILTIN_AIRPORTS.map((a) => [a.airport, { ...a }]));
+        remote.forEach((r) => {
+            const b = byIcao.get(r.airport) || {};
+            byIcao.set(r.airport, {
+                ...b,
+                ...r,
+                lat: Number.isFinite(r.lat) ? r.lat : b.lat,
+                lon: Number.isFinite(r.lon) ? r.lon : b.lon,
+                aliases: [...(b.aliases || []), ...(r.aliases || [])],
+            });
+        });
+
+        // "Haugesund lufthavn, Karmøy" also matches "Haugesund lufthavn" and "Haugesund LH"
+        return [...byIcao.values()].map((a) => {
+            const names = new Set();
+            [a.location, ...(a.aliases || [])].filter(Boolean).forEach((n) => {
+                names.add(normalizeName(n));
+                names.add(normalizeName(n.split(',')[0]));
+            });
+            return { ...a, names };
+        });
     };
 
-    const normalize = (s) => (s || '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
+    // ---------------------------------------------------------------- location on the page
 
     const safeDecode = (s) => {
         try {
@@ -63,35 +109,88 @@
         }
     };
 
-    // The location name is read from several places, so the script keeps
-    // working even if yr.no renames one of the header elements.
-    const getLocationNames = () => {
-        const names = [];
+    const getLocationId = () => location.pathname.split('/').find((s) => /^\d+-\d+$/.test(s)) || null;
 
-        // URL: /<lang>/<page>/<view>/<id>/<country>/<county>/<municipality>/<name>
-        const segments = location.pathname.split('/').filter(Boolean);
-        const idIndex = segments.findIndex((s) => /^\d+-\d+$/.test(s));
-        if (idIndex !== -1 && idIndex < segments.length - 1) {
-            names.push(safeDecode(segments[segments.length - 1]));
+    // yr.no embeds the location (incl. coordinates) in __REACT_QUERY_STATE__ on page load
+    const getLocationFromPageState = (id) => {
+        try {
+            const queries = pageWindow.__REACT_QUERY_STATE__?.queries;
+            if (!Array.isArray(queries)) return null;
+            const query = queries.find(
+                (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'location' && q.queryKey.includes(id)
+            );
+            return query?.state?.data || null;
+        } catch (ex) {
+            return null;
+        }
+    };
+
+    // After navigating inside yr.no the page state is stale, so ask yr's own API instead
+    const locationCache = new Map();
+    const pendingLocations = new Set();
+
+    const requestLocation = (id) => {
+        if (locationCache.has(id) || pendingLocations.has(id)) return;
+        pendingLocations.add(id);
+        fetch(location.origin + '/api/v0/locations/' + encodeURIComponent(id), { credentials: 'same-origin' })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+            .then((data) => {
+                locationCache.set(id, data && (data.position ? data : data.location || null));
+                pendingLocations.delete(id);
+                schedule();
+            });
+    };
+
+    const getLocationInfo = () => {
+        const id = getLocationId();
+        let data = null;
+        if (id) {
+            data = getLocationFromPageState(id) || locationCache.get(id) || null;
+            if (!data) requestLocation(id);
         }
 
-        const heading = document.querySelector(SEL.locationName) || document.querySelector('#location-heading');
-        if (heading) names.push(heading.textContent);
+        const names = [];
+        if (data?.name) names.push(data.name);
 
-        const h1 = document.querySelector('h1');
-        if (h1) names.push(h1.textContent);
+        const segments = location.pathname.split('/').filter(Boolean);
+        const idIndex = segments.indexOf(id);
+        if (idIndex !== -1 && idIndex < segments.length - 1) names.push(safeDecode(segments[segments.length - 1]));
+
+        const heading = document.querySelector('#location-heading') || document.querySelector('h1');
+        if (heading) names.push(heading.textContent);
 
         const titleMatch = document.title.match(/^Yr\s+-\s+(.+?)\s+-\s+/);
         if (titleMatch) names.push(titleMatch[1]);
 
-        return names.map(normalize).filter(Boolean);
+        const p = data?.position;
+        const position = p && Number.isFinite(p.lat) && Number.isFinite(p.lon) ? { lat: p.lat, lon: p.lon } : null;
+
+        return { id, name: names[0] || '', names: names.map(normalizeName).filter(Boolean), position };
     };
 
-    const findAirport = (airports) => {
-        const names = getLocationNames();
-        return (
-            airports.find((a) => [a.location, ...(a.aliases || [])].some((n) => names.includes(normalize(n)))) || null
-        );
+    const distanceKm = (a, b) => {
+        const rad = Math.PI / 180;
+        const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+        const y = (b.lat - a.lat) * rad;
+        return 6371 * Math.sqrt(x * x + y * y);
+    };
+
+    const findAirport = (airports, info) => {
+        if (info.position) {
+            let best = null;
+            let bestDistance = Infinity;
+            airports.forEach((a) => {
+                if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon)) return;
+                const d = distanceKm(info.position, a);
+                if (d < bestDistance) {
+                    best = a;
+                    bestDistance = d;
+                }
+            });
+            if (best && bestDistance <= MATCH_RADIUS_KM) return best;
+        }
+        return airports.find((a) => info.names.some((n) => a.names.has(n))) || null;
     };
 
     // ---------------------------------------------------------------- formatting
@@ -106,27 +205,14 @@
     const formatVariation = (variation) =>
         !variation ? '0°' : Math.abs(variation) + '° ' + (variation < 0 ? 'E' : 'W');
 
-    const withGust = (value, gust) => (gust !== null && gust !== undefined && gust > value ? value + 'G' + gust : String(value));
+    const withGust = (value, gust) =>
+        gust !== null && gust !== undefined && gust > value ? value + 'G' + gust : String(value);
 
     // ---------------------------------------------------------------- sun
 
-    const getCoordinates = (airport) => {
-        if (Number.isFinite(airport.lat) && Number.isFinite(airport.lon)) return { lat: airport.lat, lon: airport.lon };
-
-        // Fallback for airports.json entries without coordinates
-        try {
-            const locations = unsafeWindow.__REDUX_STATE__?.locations?.locations;
-            const position = locations && Object.values(locations)[0]?.position;
-            if (position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) return position;
-        } catch (ex) {
-            log('No coordinates in page state', ex);
-        }
-        return null;
-    };
-
-    const getSunInfo = (airport) => {
+    const getSunInfo = (airport, info) => {
         if (typeof SunCalc === 'undefined') return '';
-        const position = getCoordinates(airport);
+        const position = Number.isFinite(airport.lat) ? { lat: airport.lat, lon: airport.lon } : info.position;
         if (!position) return '';
 
         try {
@@ -146,7 +232,7 @@
         return d === 0 ? 360 : d;
     };
 
-    // Returns one line per runway end that has headwind (or pure crosswind).
+    // One line per runway end that has headwind (or pure crosswind)
     const getRunwayComponents = (airport, direction, speedKt, gustKt) =>
         (airport.runways || [])
             .map((rwy) => {
@@ -208,7 +294,7 @@
         /--[\w-]*(?:rotat|direction|angle)[\w-]*:\s*(-?\d+(?:\.\d+)?)/i,
     ];
 
-    // Wind direction is read from the rotation of yr's wind arrow.
+    // Wind direction is read from the rotation of yr's wind arrow (degrees the wind comes from)
     const findRotation = (scope) => {
         if (!scope || isOurs(scope)) return null;
 
@@ -235,22 +321,15 @@
 
     const isCell = (el) => el.tagName === 'TD' || el.tagName === 'TH';
 
-    // We never rewrite yr's own (React-managed) elements. Instead the original
-    // is hidden and our own copy is placed next to it. If yr re-renders, the
-    // key no longer matches and our copy is rebuilt.
+    // yr's own (React-managed) elements are never rewritten. The original is hidden and our
+    // copy is placed next to it. If yr re-renders, the key no longer matches and the copy is rebuilt.
     const getOverlay = (target) => {
         if (isCell(target)) return target.querySelector(':scope > [data-flyr]');
         const next = target.nextElementSibling;
         return next && next.hasAttribute('data-flyr') ? next : null;
     };
 
-    const hideTarget = (target) => {
-        if (isCell(target)) {
-            target.setAttribute('data-flyr-cell', '');
-        } else {
-            target.setAttribute('data-flyr-hidden', '');
-        }
-    };
+    const hideTarget = (target) => target.setAttribute(isCell(target) ? 'data-flyr-cell' : 'data-flyr-hidden', '');
 
     const removeOverlay = (target) => {
         const existing = getOverlay(target);
@@ -312,15 +391,15 @@
             [data-flyr-hidden] { display: none !important; }
             [data-flyr-cell] { font-size: 0 !important; }
             [data-flyr-cell] > :not([data-flyr]) { display: none !important; }
-            #flyr-title { flex-basis: 100%; width: 100%; margin-top: 0.25em; font-size: 0.9rem; font-weight: normal; }
+            #flyr-title { display: block; width: 100%; margin: 0.25em 0 0.5em; font-size: 0.9rem; font-weight: normal;
+                          line-height: 1.5; white-space: pre-line; }
             .flyr-runways { display: block; flex-basis: 100%; width: 100%; font-size: 0.8em; line-height: 1.35;
                             white-space: pre-line; margin-top: 0.25em; text-align: left; }
-            .flyr-direction { margin-right: 0.35em; }
         `;
         (document.head || document.documentElement).appendChild(style);
     };
 
-    const renderTitle = (airport) => {
+    const renderTitle = (airport, info, currentLine) => {
         const text =
             '🛩️ ' +
             airport.airport +
@@ -328,7 +407,8 @@
             (airport.runways || []).map(formatRunway).join(', ') +
             ' - variation: ' +
             formatVariation(airport.variation) +
-            getSunInfo(airport);
+            getSunInfo(airport, info) +
+            (currentLine ? '\n' + currentLine : '');
 
         let el = document.getElementById('flyr-title');
         if (!el) {
@@ -338,14 +418,13 @@
         }
 
         if (!el.isConnected) {
-            const anchor = document.querySelector(SEL.titleAnchor);
-            if (anchor) {
-                anchor.appendChild(el);
-            } else {
-                const heading = document.querySelector('#location-heading') || document.querySelector('h1');
-                if (!heading) return;
-                heading.insertAdjacentElement('afterend', el);
-            }
+            const locationRow = document.querySelector('.page-header__location');
+            const oldHeader = document.querySelector('.page-header__location-header');
+            const heading = document.querySelector('#location-heading') || document.querySelector('h1');
+            if (locationRow) locationRow.insertAdjacentElement('afterend', el);
+            else if (oldHeader) oldHeader.appendChild(el);
+            else if (heading) heading.insertAdjacentElement('afterend', el);
+            else return;
         }
 
         if (el.textContent !== text) el.textContent = text;
@@ -377,9 +456,10 @@
         return 'ms';
     };
 
-    const convertWind = (root, airport, pageUnit) => {
+    // Reads one of yr's wind widgets (always yr's original element, never our copy)
+    const readWind = (root, airport, pageUnit) => {
         const valueEl = root.querySelector(SEL.windValue);
-        if (!valueEl) return;
+        if (!valueEl) return null;
 
         const gustEl = root.querySelector(SEL.windGust);
         const unitEl = root.querySelector(SEL.windUnit);
@@ -387,63 +467,69 @@
         const factor = TO_KT[unit];
 
         const speed = parseNumber(valueEl.textContent);
-        if (speed === null) return;
+        if (speed === null) return null;
         const gust = gustEl ? parseNumber(gustEl.textContent) : null;
 
         const speedKt = speed * factor;
         const gustKt = gust !== null ? gust * factor : null;
-        const kt = Math.round(speedKt);
-        const gkt = gustKt !== null ? Math.round(gustKt) : null;
-
         const rotation = findRotation(root) ?? findRotation(root.closest('td'));
         const direction = rotation === null ? null : toMagnetic(rotation, airport.variation);
-        const runways = direction === null ? [] : getRunwayComponents(airport, direction, speedKt, gustKt);
+
+        return {
+            unit,
+            rotation,
+            direction,
+            kt: Math.round(speedKt),
+            gkt: gustKt !== null ? Math.round(gustKt) : null,
+            runways: direction === null ? [] : getRunwayComponents(airport, direction, speedKt, gustKt),
+        };
+    };
+
+    const formatWind = (w) => (w.direction !== null ? pad(w.direction, 3) + '° ' : '') + withGust(w.kt, w.gkt) + 'kt';
+
+    const convertWind = (root, airport, pageUnit) => {
+        const w = readWind(root, airport, pageUnit);
+        if (!w) return;
 
         const row = root.closest('tr');
         const descriptionEl = row ? row.querySelector(SEL.windDescription) : null;
-        const key = [airport.airport, unit, ownText(root), rotation].join('|');
+        const tableMode = !!row && w.direction !== null;
+        const key = [airport.airport, w.unit, ownText(root), w.rotation].join('|');
 
         overlay(root, key, (node, isSpan) => {
-            if (isSpan || (row && direction !== null)) {
-                // Table rows: compact aviation format, e.g. "228° 17G35kt"
+            if (isSpan || tableMode) {
+                // Table rows: compact aviation format, e.g. "174° 19G35kt"
                 node.classList.remove('wind--display-arrow');
-                node.textContent =
-                    (direction !== null ? pad(direction, 3) + '° ' : '') + withGust(kt, gkt) + 'kt';
-            } else {
-                // Current conditions / daily list: keep yr's layout, swap the numbers
-                const v = node.querySelector(SEL.windValue);
-                if (v) v.textContent = String(kt);
-
-                const g = node.querySelector(SEL.windGust);
-                if (g && gkt !== null) g.textContent = g.textContent.replace(/\d+(?:[.,]\d+)?/, String(gkt));
-
-                const u = node.querySelector(SEL.windUnit);
-                if (u) {
-                    u.textContent = 'kt';
-                    u.setAttribute('title', 'knots');
+                node.textContent = formatWind(w);
+                if (w.runways.length && !descriptionEl) {
+                    const r = document.createElement('div');
+                    r.className = 'flyr-runways';
+                    r.textContent = w.runways.join(', ');
+                    node.style.flexWrap = 'wrap';
+                    node.appendChild(r);
                 }
-
-                if (direction !== null) {
-                    const d = document.createElement('span');
-                    d.className = 'flyr-direction';
-                    d.textContent = pad(direction, 3) + '°';
-                    (node.querySelector(SEL.windContainer) || node).prepend(d);
-                }
+                return;
             }
 
-            if (runways.length && !descriptionEl) {
-                const r = document.createElement('div');
-                r.className = 'flyr-runways';
-                r.textContent = runways.join(row ? ', ' : '\n');
-                node.style.flexWrap = 'wrap';
-                node.appendChild(r);
+            // Everywhere else: keep yr's layout (incl. the arrow), only swap numbers and unit.
+            // Direction and runway components for "now" are shown in the Flyr header line.
+            const v = node.querySelector(SEL.windValue);
+            if (v) v.textContent = String(w.kt);
+
+            const g = node.querySelector(SEL.windGust);
+            if (g && w.gkt !== null) g.textContent = g.textContent.replace(/\d+(?:[.,]\d+)?/, String(w.gkt));
+
+            const u = node.querySelector(SEL.windUnit);
+            if (u) {
+                u.textContent = 'kt';
+                u.setAttribute('title', 'knots');
             }
         });
 
         if (descriptionEl) {
-            if (runways.length) {
+            if (tableMode && w.runways.length) {
                 overlay(descriptionEl, key, (node) => {
-                    node.textContent = runways.join(', ');
+                    node.textContent = w.runways.join(', ');
                 });
             } else {
                 removeOverlay(descriptionEl);
@@ -451,14 +537,22 @@
         }
     };
 
-    const convertAllWind = (airport) => {
-        const pageUnit = getPageUnit();
+    // "Now" line for the Flyr header, read from yr's current-conditions box
+    const getCurrentWindLine = (airport, pageUnit) => {
+        const root = [...document.querySelectorAll('.now-hero ' + SEL.windRoot)].find(
+            (el) => !isOurs(el) && el.querySelector(SEL.windValue)
+        );
+        const w = root && readWind(root, airport, pageUnit);
+        if (!w) return '';
+        return '💨 Now: ' + formatWind(w) + (w.runways.length ? ' · ' + w.runways.join(' · ') : '');
+    };
+
+    const convertAllWind = (airport, pageUnit) => {
         const roots = new Set();
 
         document.querySelectorAll(SEL.windValue).forEach((valueEl) => {
             if (isOurs(valueEl)) return;
-            const root =
-                valueEl.closest(SEL.windRoot) || valueEl.closest(SEL.windContainer) || valueEl.parentElement;
+            const root = valueEl.closest(SEL.windRoot) || valueEl.closest(SEL.windContainer) || valueEl.parentElement;
             if (root) roots.add(root);
         });
 
@@ -490,27 +584,32 @@
 
     const airports = loadAirports();
     let activeAirport = null;
-    let warnedForUrl = null;
+    let reportedUrl = null;
 
     const applyFlyr = () => {
-        const airport = findAirport(airports);
+        const info = getLocationInfo();
+        const airport = findAirport(airports, info);
 
         if (airport !== activeAirport) {
             cleanup();
             activeAirport = airport;
-            if (airport) log('Active airport', airport.airport);
+            if (airport) log('Active airport', airport.airport, info);
         }
-        if (!airport) return;
+
+        if (!airport) {
+            if (info.id && !pendingLocations.has(info.id) && reportedUrl !== location.href) {
+                reportedUrl = location.href;
+                console.info('[Flyr] No airport matches "' + info.name + '" (' + info.id + ')', info.position || '');
+            }
+            return;
+        }
 
         ensureStyle();
-        renderTitle(airport);
         convertHeaders();
-        const count = convertAllWind(airport);
-
-        if (count === 0 && /forecast|varsel|værvarsel/i.test(location.pathname) && warnedForUrl !== location.href) {
-            warnedForUrl = location.href;
-            log('No wind elements (' + SEL.windValue + ') found on this page. yr.no may have changed its markup.');
-        }
+        const pageUnit = getPageUnit();
+        renderTitle(airport, info, getCurrentWindLine(airport, pageUnit));
+        const count = convertAllWind(airport, pageUnit);
+        if (count === 0) log('No wind elements (' + SEL.windValue + ') found on this page.');
     };
 
     const observer = new MutationObserver(() => schedule());
@@ -536,15 +635,16 @@
     };
 
     let timer = null;
-    const schedule = () => {
+    function schedule() {
         if (timer) return;
         timer = setTimeout(() => {
             timer = null;
             run();
         }, 150);
-    };
+    }
 
-    if (!airports.length) return;
-    observe();
-    schedule();
+    // Give yr.no time to hydrate its server-rendered page before we touch it
+    const start = () => setTimeout(run, 300);
+    if (document.readyState === 'complete') start();
+    else window.addEventListener('load', start, { once: true });
 })();
