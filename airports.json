@@ -3,48 +3,64 @@
         "airport": "ENBL",
         "location": "Førde lufthamn, Bringeland",
         "variation": -0.4,
-        "runways": [7, 25]
+        "runways": [7, 25],
+        "lat": 61.3917,
+        "lon": 5.7636
     },
     {
         "airport": "ENBR",
         "location": "Bergen lufthavn, Flesland",
         "variation": -0.5,
-        "runways": [17, 35]
+        "runways": [17, 35],
+        "lat": 60.2936,
+        "lon": 5.2181
     },
     {
         "airport": "ENCN",
         "location": "Kristiansand lufthavn, Kjevik",
         "variation": -2.6,
-        "runways": [3,21]
+        "runways": [3, 21],
+        "lat": 58.2042,
+        "lon": 8.0853
     },
     {
         "airport": "ENFL",
         "location": "Florø lufthamn",
         "variation": 0,
-        "runways": [7, 25]
+        "runways": [7, 25],
+        "lat": 61.5836,
+        "lon": 5.0247
     },
     {
         "airport": "ENHD",
         "location": "Haugesund lufthavn, Karmøy",
         "variation": -1,
-        "runways": [13, 31]
+        "runways": [13, 31],
+        "lat": 59.3453,
+        "lon": 5.2084
     },
     {
         "airport": "ENSG",
         "location": "Sogndal lufthamn, Haukåsen",
         "variation": -1.1,
-        "runways": [6, 24]
+        "runways": [6, 24],
+        "lat": 61.1561,
+        "lon": 7.1378
     },
     {
         "airport": "ENSO",
         "location": "Stord lufthavn",
         "variation": -2,
-        "runways": [14, 32]
+        "runways": [14, 32],
+        "lat": 59.7919,
+        "lon": 5.3408
     },
     {
         "airport": "ENZV",
         "location": "Stavanger lufthavn, Sola",
         "variation": -1,
-        "runways": [18, 36, 11, 29]
+        "runways": [18, 36, 11, 29],
+        "lat": 58.8767,
+        "lon": 5.6378
     }
 ]
